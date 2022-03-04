@@ -2,7 +2,6 @@ package surfstore
 
 import (
 	context "context"
-	"errors"
 	"math"
 	"sync"
 	"time"
@@ -52,17 +51,20 @@ type RaftSurfstore struct {
 
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
 	//panic("todo")
-	s.isCrashedMutex.RLock()
-	if s.isCrashed == true {
-		return nil, errors.New("The server crashed")
-	}
-	s.isCrashedMutex.RUnlock()
 
 	s.isLeaderMutex.RLock()
 	if s.isLeader == false {
-		return nil, errors.New("Not the leader")
+		defer s.isLeaderMutex.RUnlock()
+		return nil, ERR_NOT_LEADER
 	}
 	s.isLeaderMutex.RUnlock()
+
+	s.isCrashedMutex.RLock()
+	if s.isCrashed == true {
+		s.isCrashedMutex.RUnlock()
+		return nil, ERR_SERVER_CRASHED
+	}
+	s.isCrashedMutex.RUnlock()
 
 	// Is it possible that we call GetBlockStoreAddr in a crashed leader?
 	aliveServers := 1
@@ -113,9 +115,17 @@ func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Em
 	//panic("todo")
 	s.isLeaderMutex.RLock()
 	if s.isLeader == false {
-		return nil, errors.New("Not the leader")
+		defer s.isLeaderMutex.RUnlock()
+		return nil, ERR_NOT_LEADER
 	}
 	s.isLeaderMutex.RUnlock()
+
+	s.isCrashedMutex.RLock()
+	if s.isCrashed == true {
+		defer s.isCrashedMutex.RUnlock()
+		return nil, ERR_SERVER_CRASHED
+	}
+	s.isCrashedMutex.RUnlock()
 
 	// Is it possible that we call GetBlockStoreAddr in a crashed server?
 	aliveServers := 0
@@ -148,17 +158,20 @@ func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Em
 func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) (*Version, error) {
 	//panic("todo")
 	//fmt.Println("Updating file")
-	s.isCrashedMutex.RLock()
-	if s.isCrashed == true {
-		return nil, errors.New("The server is crashed!")
-	}
-	s.isCrashedMutex.RUnlock()
 
 	s.isLeaderMutex.RLock()
 	if s.isLeader == false {
-		return nil, errors.New("Not the leader")
+		defer s.isLeaderMutex.RUnlock()
+		return nil, ERR_NOT_LEADER
 	}
 	s.isLeaderMutex.RUnlock()
+
+	s.isCrashedMutex.RLock()
+	if s.isCrashed == true {
+		defer s.isCrashedMutex.RUnlock()
+		return nil, ERR_SERVER_CRASHED
+	}
+	s.isCrashedMutex.RUnlock()
 
 	op := UpdateOperation{
 		Term:         s.term,
@@ -211,6 +224,9 @@ func (s *RaftSurfstore) AttemptCommit() {
 		if appendCount > len(s.ipList)/2 {
 			s.pendingCommits[targetIndex] <- true
 			s.commitIndex = targetIndex
+			//break
+		}
+		if appendCount == len(s.ipList) {
 			break
 		}
 	}
@@ -287,7 +303,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	// If the server is crashed -> return error
 	s.isCrashedMutex.RLock()
 	if s.isCrashed == true {
-		return nil, errors.New("Server is crashed!")
+		return nil, ERR_SERVER_CRASHED
 	}
 	s.isCrashedMutex.RUnlock()
 
@@ -372,7 +388,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 	s.isCrashedMutex.RLock()
 	defer s.isCrashedMutex.RUnlock()
 	if s.isCrashed == true {
-		return &Success{Flag: false}, errors.New("The server is crashed!")
+		return &Success{Flag: false}, ERR_SERVER_CRASHED
 	}
 
 	// TODO: further check about whether the server can be set to be a leader
@@ -392,7 +408,7 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 	s.isCrashedMutex.RLock()
 	if s.isCrashed == true {
 		defer s.isCrashedMutex.RUnlock()
-		return nil, errors.New("The server is crashed")
+		return nil, ERR_SERVER_CRASHED
 	}
 	s.isCrashedMutex.RUnlock()
 
@@ -413,55 +429,6 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 			continue
 		}
 		go s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
-		// conn, err := grpc.Dial(addr, grpc.WithInsecure())
-		// defer conn.Close()
-		// if err != nil {
-		// 	return nil, errors.New("Cannot connect to a follower")
-		// }
-		// client := NewRaftSurfstoreClient(conn)
-
-		// input := &AppendEntryInput{
-		// 	Term:         s.term,
-		// 	PrevLogIndex: int64(len(s.log) - 1),
-		// 	PrevLogTerm:  0,
-		// 	Entries:      make([]*UpdateOperation, 0),
-		// 	LeaderCommit: s.commitIndex,
-		// }
-
-		// if input.PrevLogIndex > -1 {
-		// 	input.PrevLogTerm = s.log[input.PrevLogIndex].Term
-		// }
-
-		// ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		// defer cancel()
-
-		// for {
-		// 	output, err := client.AppendEntries(ctx, input) // What if we cannot connect to a follower?
-		// 	if err != nil {                                 // keep trying indefinitely if connection failed or server crashed
-		// 		continue // not sure if I should add goroutine since this might block the process when one server is down
-		// 	}
-
-		// 	if output.Success == true {
-		// 		break
-		// 	}
-		// 	if output.Term > s.term {
-		// 		s.term = output.Term
-		// 		s.isLeaderMutex.Lock()
-		// 		s.isLeader = false
-		// 		s.isLeaderMutex.Unlock()
-		// 		return &Success{Flag: false}, nil
-		// 	}
-		// 	if output.MatchedIndex == -1 {
-		// 		input.Entries = s.log
-		// 		input.PrevLogIndex = -1
-		// 		input.PrevLogTerm = 0
-		// 	} else {
-		// 		input.Entries = append(s.log[output.MatchedIndex:input.PrevLogIndex+1], input.Entries...)
-		// 		input.PrevLogIndex = output.MatchedIndex
-		// 		input.PrevLogTerm = s.log[input.PrevLogIndex].Term
-		// 	}
-		// }
-
 	}
 
 	appendCount := 1
