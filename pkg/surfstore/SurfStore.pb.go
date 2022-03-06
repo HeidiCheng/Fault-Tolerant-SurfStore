@@ -478,6 +478,7 @@ type AppendEntryInput struct {
 	PrevLogTerm  int64              `protobuf:"varint,3,opt,name=prevLogTerm,proto3" json:"prevLogTerm,omitempty"`
 	Entries      []*UpdateOperation `protobuf:"bytes,4,rep,name=entries,proto3" json:"entries,omitempty"`
 	LeaderCommit int64              `protobuf:"varint,5,opt,name=leaderCommit,proto3" json:"leaderCommit,omitempty"`
+	//pendingCommits [] chan bool     `protobuf:"varint,5,opt,name=pendingCommits,proto3" json:"pendingCommits,omitempty"`
 }
 
 func (x *AppendEntryInput) Reset() {
