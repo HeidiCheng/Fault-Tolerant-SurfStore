@@ -24,8 +24,8 @@ type RaftSurfstore struct {
 	serverId int64
 
 	// Previous log info
-	nextIndex  int64
-	matchIndex int64
+	nextIndex  []int64
+	matchIndex []int64
 	//PrevLogIndex int64
 	//PrevLogTerm  int64
 
@@ -33,9 +33,8 @@ type RaftSurfstore struct {
 	lastApplied int64
 
 	// Commit
-	lastLeaderCommitted int64
-	commitIndex         int64
-	pendingCommits      []chan bool
+	commitIndex    int64
+	pendingCommits []chan bool
 
 	// Locks
 	isLeaderMutex *sync.RWMutex
@@ -101,7 +100,6 @@ func (s *RaftSurfstore) CheckAliveness(serverIdx int64, alive chan bool) {
 		return
 	}
 	client := NewRaftSurfstoreClient(conn)
-	defer conn.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -181,7 +179,8 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	s.logMutex.Lock()
 	s.log = append(s.log, &op)
 	s.logMutex.Unlock()
-	s.nextIndex++
+	s.nextIndex[s.serverId]++
+	//s.matchIndex[s.serverId]++
 	//fmt.Println(s.log)
 
 	committed := make(chan bool)
@@ -193,6 +192,12 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	if success {
 		_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
 		return s.metaStore.UpdateFile(ctx, filemeta)
+	} else {
+		// if the leader turn into follower
+		s.isLeaderMutex.Lock()
+		s.isLeader = false
+		s.isLeaderMutex.Unlock()
+		return nil, ERR_NOT_LEADER
 	}
 
 	return nil, nil
@@ -200,14 +205,15 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 
 func (s *RaftSurfstore) AttemptCommit() {
 
-	targetIndex := s.commitIndex + 1
+	//targetIndex := s.commitIndex + 1
+	targetIndex := s.matchIndex[s.serverId] + 1
 	appendChan := make(chan *AppendEntryOutput, len(s.ipList))
 
 	for idx, _ := range s.ipList {
 		if int64(idx) == s.serverId {
 			continue
 		}
-		go s.AppendEntriesToFollowers(int64(idx), targetIndex, appendChan)
+		go s.AppendEntriesToFollowers(int64(idx), s.commitIndex+1, appendChan)
 	}
 
 	appendCount := 1
@@ -217,6 +223,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		appended := <-appendChan
 		// leader change to follower
 		if appended.Term > s.term {
+			s.pendingCommits[targetIndex] <- false
 			break
 		}
 		if appended != nil && appended.Success {
@@ -224,7 +231,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		}
 		if appendCount > len(s.ipList)/2 {
 			s.pendingCommits[targetIndex] <- true
-			s.commitIndex = targetIndex
+			s.commitIndex++
 			//break
 		}
 		if appendCount == len(s.ipList) {
@@ -281,7 +288,11 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 		output, err := client.AppendEntries(ctx, input)
 		// server crashed -> try to reconnect the server
 		if err != nil {
-			appendChan <- output
+			// heartbeat
+			if entryIndex == -1 {
+				appendChan <- output
+				return
+			}
 			continue
 		}
 		// success
@@ -319,11 +330,6 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInput) (*AppendEntryOutput, error) {
 	//panic("todo")
 	// If the server is crashed -> return error
-	s.isCrashedMutex.RLock()
-	if s.isCrashed == true {
-		return nil, ERR_SERVER_CRASHED
-	}
-	s.isCrashedMutex.RUnlock()
 
 	output := AppendEntryOutput{
 		ServerId:     s.serverId,
@@ -331,6 +337,12 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 		MatchedIndex: -1,
 		Term:         input.Term,
 	}
+
+	s.isCrashedMutex.RLock()
+	if s.isCrashed == true {
+		return &output, ERR_SERVER_CRASHED
+	}
+	s.isCrashedMutex.RUnlock()
 
 	// 1. Reply false if term < currentTerm (§5.1)
 	if input.Term < s.term {
@@ -348,8 +360,8 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	// 2. Reply false if log doesn’t contain an entry at prevLogIndex whose term
 	// matches prevLogTerm (§5.3)
 	if (int64(len(s.log)-1) < input.PrevLogIndex) || (len(s.log) > 0 && s.log[input.PrevLogIndex].Term != input.PrevLogTerm) {
-		s.matchIndex = int64(math.Min(float64(s.matchIndex), float64(input.PrevLogIndex-1)))
-		output.MatchedIndex = s.matchIndex
+		s.nextIndex[s.serverId] = int64(math.Min(float64(s.nextIndex[s.serverId]), float64(input.PrevLogIndex-1)))
+		output.MatchedIndex = s.nextIndex[s.serverId]
 		return &output, nil
 	}
 
@@ -365,8 +377,8 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	s.logMutex.Lock()
 	s.log = append(s.log, input.Entries...)
 	s.logMutex.Unlock()
-	s.nextIndex = int64(len(s.log))
-	s.matchIndex = int64(len(s.log) - 1)
+	s.nextIndex[s.serverId] = int64(len(s.log))
+	s.matchIndex[s.serverId] += int64(len(input.Entries))
 	//fmt.Println(s.log)
 
 	// 5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
@@ -402,9 +414,13 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 	s.isLeader = true
 	s.isLeaderMutex.Unlock()
 	s.term++
-	s.lastLeaderCommitted = s.commitIndex
-	//log.Println("New leader's log")
-	//log.Println(s.log)
+
+	for i, _ := range s.nextIndex {
+		s.nextIndex[i] = int64(len(s.log))
+		s.matchIndex[i] = -1
+	}
+
+	s.pendingCommits = make([]chan bool, 0)
 
 	return &Success{Flag: true}, nil
 }
@@ -424,46 +440,23 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 	s.isLeaderMutex.RLock()
 	if s.isLeader == false {
 		defer s.isLeaderMutex.RUnlock()
-		return &Success{Flag: false}, nil
+		return &Success{Flag: false}, ERR_NOT_LEADER
 	}
 	s.isLeaderMutex.RUnlock()
-
-	// for idx, add := range s.ipList {
-
-	// }
 
 	appendChan := make(chan *AppendEntryOutput, len(s.ipList))
 	for idx, _ := range s.ipList {
 		if int64(idx) == s.serverId {
 			continue
 		}
-		go s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
-	}
-
-	appendCount := 1
-
-	// TODO: handle leader change to followers
-	for {
+		//go s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
+		s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		output := <-appendChan
-
 		if output != nil && output.Term > s.term {
-			s.term = output.Term
 			s.isLeaderMutex.Lock()
 			s.isLeader = false
 			s.isLeaderMutex.Unlock()
 			return &Success{Flag: false}, nil
-		}
-
-		appendCount++
-		// if output != nil && output.Success {
-		// 	appendCount++
-		// }
-		// if output != nil {
-		// 	appendCount++
-		// }
-
-		if appendCount == len(s.ipList) {
-			break
 		}
 	}
 
