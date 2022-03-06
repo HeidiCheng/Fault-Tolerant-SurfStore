@@ -218,6 +218,10 @@ func (s *RaftSurfstore) AttemptCommit() {
 	// TODO: handle leader change to followers
 	for {
 		appended := <-appendChan
+		// leader change to follower
+		if appended.Term > s.term {
+			break
+		}
 		if appended != nil && appended.Success {
 			appendCount++
 		}
@@ -235,6 +239,13 @@ func (s *RaftSurfstore) AttemptCommit() {
 func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, appendChan chan *AppendEntryOutput) {
 
 	for {
+		s.isLeaderMutex.Lock()
+		if s.isLeader == false {
+			defer s.isLeaderMutex.Unlock()
+			break
+		}
+		s.isLeaderMutex.Unlock()
+
 		addr := s.ipList[serverIndex]
 		conn, err := grpc.Dial(addr, grpc.WithInsecure())
 		defer conn.Close()
@@ -329,9 +340,6 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	// 2. Reply false if log doesn’t contain an entry at prevLogIndex whose term
 	// matches prevLogTerm (§5.3)
-	// if s.PrevLogIndex < input.PrevLogIndex || (s.PrevLogIndex == input.PrevLogIndex && s.PrevLogTerm != input.PrevLogTerm) {
-	// 	return &output, nil
-	// }
 	if (int64(len(s.log)-1) < input.PrevLogIndex) || (len(s.log) > 0 && s.log[input.PrevLogIndex].Term != input.PrevLogTerm) {
 		s.matchIndex = int64(math.Min(float64(s.matchIndex), float64(input.PrevLogIndex-1)))
 		output.MatchedIndex = s.matchIndex
@@ -340,13 +348,6 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	// 3. If an existing entry conflicts with a new one (same index but different
 	// terms), delete the existing entry and all that follow it (§5.3)
-	// if s.PrevLogIndex > input.PrevLogIndex || (s.PrevLogIndex == input.PrevLogIndex && s.log[input.PrevLogIndex+1].Term != input.Term) {
-	// 	s.logMutex.Lock()
-	// 	s.log = s.log[:input.PrevLogIndex+1]
-	// 	s.PrevLogIndex = input.PrevLogIndex
-	// 	s.PrevLogTerm = s.log[input.PrevLogIndex].Term
-	// 	s.logMutex.Unlock()
-	// }
 	if int64(len(s.log)-1) > input.PrevLogIndex && s.log[input.PrevLogIndex+1].Term != input.Term {
 		s.logMutex.Lock()
 		s.log = s.log[:input.PrevLogIndex+1]
