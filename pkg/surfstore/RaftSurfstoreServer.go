@@ -66,27 +66,37 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 	}
 	s.isCrashedMutex.RUnlock()
 
-	// Is it possible that we call GetBlockStoreAddr in a crashed leader?
-	aliveServers := 1
-
-	aliveChan := make(chan bool, len(s.ipList))
-	for idx, _ := range s.ipList {
-		if int64(idx) == s.serverId {
-			continue
-		}
-		go s.CheckAliveness(int64(idx), aliveChan)
-	}
-
 	for {
-		alive := <-aliveChan
-
-		if alive == true {
-			aliveServers++
+		state, err := s.SendHeartbeat(ctx, &emptypb.Empty{})
+		if err != nil && err == ERR_NOT_LEADER {
+			return nil, ERR_NOT_LEADER
 		}
-		if aliveServers > len(s.ipList)/2 {
+		if state != nil && state.Flag {
 			return &FileInfoMap{FileInfoMap: s.metaStore.FileMetaMap}, nil
 		}
 	}
+
+	// Is it possible that we call GetBlockStoreAddr in a crashed leader?
+	// aliveServers := 1
+
+	// aliveChan := make(chan bool, len(s.ipList))
+	// for idx, _ := range s.ipList {
+	// 	if int64(idx) == s.serverId {
+	// 		continue
+	// 	}
+	// 	go s.CheckAliveness(int64(idx), aliveChan)
+	// }
+
+	// for {
+	// 	alive := <-aliveChan
+
+	// 	if alive == true {
+	// 		aliveServers++
+	// 	}
+	// 	if aliveServers > len(s.ipList)/2 {
+	// 		return &FileInfoMap{FileInfoMap: s.metaStore.FileMetaMap}, nil
+	// 	}
+	// }
 
 	return nil, nil
 }
@@ -126,31 +136,41 @@ func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Em
 	}
 	s.isCrashedMutex.RUnlock()
 
-	// Is it possible that we call GetBlockStoreAddr in a crashed server?
-	aliveServers := 0
-	s.isCrashedMutex.RLock()
-	if s.isCrashed == false {
-		aliveServers++
-	}
-	s.isCrashedMutex.RUnlock()
-
-	aliveChan := make(chan bool, len(s.ipList))
-	for idx, _ := range s.ipList {
-		if int64(idx) == s.serverId {
-			continue
-		}
-		go s.CheckAliveness(int64(idx), aliveChan)
-	}
-
 	for {
-		alive := <-aliveChan
-		if alive == true {
-			aliveServers++
+		state, err := s.SendHeartbeat(ctx, &emptypb.Empty{})
+		if err != nil && err == ERR_NOT_LEADER {
+			return nil, ERR_NOT_LEADER
 		}
-		if aliveServers > len(s.ipList)/2 {
+		if state != nil && state.Flag {
 			return &BlockStoreAddr{Addr: s.metaStore.BlockStoreAddr}, nil
 		}
 	}
+
+	// Is it possible that we call GetBlockStoreAddr in a crashed server?
+	// aliveServers := 0
+	// s.isCrashedMutex.RLock()
+	// if s.isCrashed == false {
+	// 	aliveServers++
+	// }
+	// s.isCrashedMutex.RUnlock()
+
+	// aliveChan := make(chan bool, len(s.ipList))
+	// for idx, _ := range s.ipList {
+	// 	if int64(idx) == s.serverId {
+	// 		continue
+	// 	}
+	// 	go s.CheckAliveness(int64(idx), aliveChan)
+	// }
+
+	// for {
+	// 	alive := <-aliveChan
+	// 	if alive == true {
+	// 		aliveServers++
+	// 	}
+	// 	if aliveServers > len(s.ipList)/2 {
+	// 		return &BlockStoreAddr{Addr: s.metaStore.BlockStoreAddr}, nil
+	// 	}
+	// }
 	return nil, nil
 }
 
@@ -444,6 +464,7 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 	}
 	s.isLeaderMutex.RUnlock()
 
+	count := 1
 	appendChan := make(chan *AppendEntryOutput, len(s.ipList))
 	for idx, _ := range s.ipList {
 		if int64(idx) == s.serverId {
@@ -456,11 +477,18 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 			s.isLeaderMutex.Lock()
 			s.isLeader = false
 			s.isLeaderMutex.Unlock()
-			return &Success{Flag: false}, nil
+			return &Success{Flag: false}, ERR_NOT_LEADER
+		}
+		if output != nil && output.Success {
+			count++
 		}
 	}
 
-	return &Success{Flag: true}, nil
+	if count > len(s.ipList)/2 {
+		return &Success{Flag: true}, nil
+	}
+
+	return &Success{Flag: false}, nil
 }
 
 func (s *RaftSurfstore) Crash(ctx context.Context, _ *emptypb.Empty) (*Success, error) {

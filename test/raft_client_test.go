@@ -2,6 +2,7 @@ package SurfTest
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"testing"
 
@@ -146,6 +147,7 @@ func TestSyncTwoClientsFileUpdateLeaderFailure(t *testing.T) {
 	}
 
 	test.Clients[1].SetLeader(test.Context, &emptypb.Empty{})
+	test.Clients[1].SendHeartbeat(test.Context, &emptypb.Empty{})
 
 	err = worker2.UpdateFile(file1, "update text")
 	if err != nil {
@@ -177,6 +179,7 @@ func TestSyncTwoClientsFileUpdateLeaderFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not load meta file for client1")
 	}
+	log.Println(fileMeta1)
 
 	_, err = os.Stat(workingDir + "/test1/" + META_FILENAME)
 	if err != nil {
@@ -187,6 +190,7 @@ func TestSyncTwoClientsFileUpdateLeaderFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Could not load meta file for client2")
 	}
+	log.Println(fileMeta2)
 
 	if len(fileMeta1) != 1 {
 		t.Fatalf("Wrong number of entries in client1 meta file")
