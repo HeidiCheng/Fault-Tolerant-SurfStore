@@ -235,7 +235,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		if int64(idx) == s.serverId {
 			continue
 		}
-		go s.AppendEntriesToFollowers(int64(idx), s.nextIndex[s.serverId]-1, appendChan)
+		go s.AppendEntriesToFollowers(int64(idx), s.commitIndex+1, appendChan)
 	}
 
 	appendCount := 1
@@ -261,7 +261,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		}
 		if appendCount > len(s.ipList)/2 {
 			s.pendingCommits[targetIndex] <- true
-			s.commitIndex = s.nextIndex[s.serverId] - 1 // not sure about this
+			s.commitIndex++ // not sure about this
 			//break
 		}
 		if appendCount == len(s.ipList) {
@@ -370,6 +370,9 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 		MatchedIndex: -1,
 		Term:         input.Term,
 	}
+
+	log.Println("server id:", s.serverId)
+	log.Println("log: ", s.log)
 
 	s.isCrashedMutex.RLock()
 	if s.isCrashed == true {
