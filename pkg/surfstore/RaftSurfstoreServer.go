@@ -196,12 +196,12 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		FileMetaData: filemeta,
 	}
 
+	// append entry to leader
 	s.logMutex.Lock()
 	s.log = append(s.log, &op)
 	s.logMutex.Unlock()
 	s.nextIndex[s.serverId]++
-	//s.matchIndex[s.serverId]++
-	//fmt.Println(s.log)
+	s.matchIndex[s.serverId]++
 
 	committed := make(chan bool)
 	s.pendingCommits = append(s.pendingCommits, committed) // deal with multiple sync
@@ -214,6 +214,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		return s.metaStore.UpdateFile(ctx, filemeta)
 	} else {
 		// if the leader turn into follower
+		// did not handle the leader crashed error
 		s.isLeaderMutex.Lock()
 		s.isLeader = false
 		s.isLeaderMutex.Unlock()
@@ -226,7 +227,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 func (s *RaftSurfstore) AttemptCommit() {
 
 	//targetIndex := s.commitIndex + 1
-	targetIndex := s.matchIndex[s.serverId] + 1
+	targetIndex := s.matchIndex[s.serverId]
 	appendChan := make(chan *AppendEntryOutput, len(s.ipList))
 
 	for idx, _ := range s.ipList {
@@ -240,6 +241,14 @@ func (s *RaftSurfstore) AttemptCommit() {
 
 	// TODO: handle leader change to followers
 	for {
+		s.isCrashedMutex.RLock()
+		if s.isCrashed == true {
+			defer s.isCrashedMutex.RUnlock()
+			s.pendingCommits[targetIndex] <- false
+			break
+		}
+		s.isCrashedMutex.RUnlock()
+
 		appended := <-appendChan
 		// leader change to follower
 		if appended.Term > s.term {
@@ -317,6 +326,9 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 		}
 		// success
 		if output.Success == true {
+			s.nextIndex[serverIndex] = int64(len(s.log))
+			s.matchIndex[serverIndex] = s.matchIndex[s.serverId]
+
 			appendChan <- output
 			return
 		}
@@ -332,7 +344,7 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 			input.PrevLogIndex = -1
 			input.PrevLogTerm = 0
 		} else {
-			input.Entries = append(s.log[output.MatchedIndex:input.PrevLogIndex+1], input.Entries...)
+			input.Entries = append(s.log[output.MatchedIndex:input.PrevLogIndex+1], input.Entries...) // not sure if this is correct
 			input.PrevLogIndex = output.MatchedIndex
 			input.PrevLogTerm = s.log[input.PrevLogIndex].Term
 		}
@@ -379,8 +391,8 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	// 2. Reply false if log doesn’t contain an entry at prevLogIndex whose term
 	// matches prevLogTerm (§5.3)
-	if (int64(len(s.log)-1) < input.PrevLogIndex) || (len(s.log) > 0 && s.log[input.PrevLogIndex].Term != input.PrevLogTerm) {
-		s.nextIndex[s.serverId] = int64(math.Min(float64(s.nextIndex[s.serverId]), float64(input.PrevLogIndex-1)))
+	if (int64(len(s.log)-1) < input.PrevLogIndex) || (len(s.log) > 0 && input.PrevLogIndex > -1 && s.log[input.PrevLogIndex].Term != input.PrevLogTerm) {
+		s.nextIndex[s.serverId] = int64(math.Min(float64(len(s.log)), float64(input.PrevLogIndex-1)))
 		output.MatchedIndex = s.nextIndex[s.serverId]
 		return &output, nil
 	}
@@ -413,7 +425,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	}
 
 	output.Success = true
-	output.MatchedIndex = s.commitIndex
+	output.MatchedIndex = s.nextIndex[s.serverId]
 
 	//fmt.Println(s.log)
 	return &output, nil
