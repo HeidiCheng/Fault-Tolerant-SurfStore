@@ -2,6 +2,7 @@ package surfstore
 
 import (
 	context "context"
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -234,7 +235,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		if int64(idx) == s.serverId {
 			continue
 		}
-		go s.AppendEntriesToFollowers(int64(idx), s.commitIndex+1, appendChan)
+		go s.AppendEntriesToFollowers(int64(idx), s.nextIndex[s.serverId]-1, appendChan)
 	}
 
 	appendCount := 1
@@ -260,7 +261,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		}
 		if appendCount > len(s.ipList)/2 {
 			s.pendingCommits[targetIndex] <- true
-			s.commitIndex++
+			s.commitIndex = s.nextIndex[s.serverId] - 1 // not sure about this
 			//break
 		}
 		if appendCount == len(s.ipList) {
@@ -326,9 +327,9 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 		}
 		// success
 		if output.Success == true {
+			log.Println(s.log)
 			s.nextIndex[serverIndex] = int64(len(s.log))
 			s.matchIndex[serverIndex] = s.matchIndex[s.serverId]
-
 			appendChan <- output
 			return
 		}
@@ -372,7 +373,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	s.isCrashedMutex.RLock()
 	if s.isCrashed == true {
-		return &output, ERR_SERVER_CRASHED
+		return nil, ERR_SERVER_CRASHED
 	}
 	s.isCrashedMutex.RUnlock()
 
