@@ -3,6 +3,7 @@ package surfstore
 import (
 	context "context"
 	"fmt"
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -202,6 +203,8 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	s.log = append(s.log, &op)
 	s.logMutex.Unlock()
 	s.nextIndex[s.serverId]++
+	log.Println("Leader Id: ", s.serverId)
+	log.Println("Leader log: ", s.log)
 
 	committed := make(chan bool)
 	s.pendingCommits = append(s.pendingCommits, committed) // deal with multiple sync

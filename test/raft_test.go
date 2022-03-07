@@ -4,6 +4,7 @@ import (
 	context "context"
 	"cse224/proj5/pkg/surfstore"
 	"testing"
+	"time"
 
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
@@ -134,11 +135,12 @@ func TestRaftRecovery(t *testing.T) {
 	test.Clients[1].Crash(test.Context, &emptypb.Empty{})
 	test.Clients[2].Crash(test.Context, &emptypb.Empty{})
 
-	test.Clients[leaderIdx].UpdateFile(context.Background(), filemeta1)
+	go test.Clients[leaderIdx].UpdateFile(context.Background(), filemeta1)
 
 	test.Clients[1].Restore(test.Context, &emptypb.Empty{})
 	test.Clients[2].Restore(test.Context, &emptypb.Empty{})
 
+	time.Sleep(2 * time.Second)
 	goldenMeta := surfstore.NewMetaStore("")
 	goldenMeta.UpdateFile(test.Context, filemeta1)
 	goldenLog := make([]*surfstore.UpdateOperation, 0)
