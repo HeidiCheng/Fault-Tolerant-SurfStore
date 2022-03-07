@@ -202,7 +202,6 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	s.log = append(s.log, &op)
 	s.logMutex.Unlock()
 	s.nextIndex[s.serverId]++
-	s.matchIndex[s.serverId]++
 
 	committed := make(chan bool)
 	s.pendingCommits = append(s.pendingCommits, committed) // deal with multiple sync
@@ -228,7 +227,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 func (s *RaftSurfstore) AttemptCommit() {
 
 	//targetIndex := s.commitIndex + 1
-	targetIndex := s.matchIndex[s.serverId]
+	targetIndex := s.matchIndex[s.serverId] + 1
 	appendChan := make(chan *AppendEntryOutput, len(s.ipList))
 
 	for idx, _ := range s.ipList {
@@ -253,6 +252,12 @@ func (s *RaftSurfstore) AttemptCommit() {
 
 		appended := <-appendChan
 		// leader change to follower
+
+		if appended.Success == false {
+			s.pendingCommits[targetIndex] <- false
+			break
+		}
+
 		if appended.Term > s.term {
 			s.pendingCommits[targetIndex] <- false
 			break
@@ -262,6 +267,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		}
 		if appendCount > len(s.ipList)/2 && (committed == false) {
 			s.pendingCommits[targetIndex] <- true
+			s.matchIndex[s.serverId]++
 			s.commitIndex++ // not sure about this
 			committed = true
 			//break
@@ -275,9 +281,12 @@ func (s *RaftSurfstore) AttemptCommit() {
 func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, appendChan chan *AppendEntryOutput) {
 
 	for {
+		// server crashed or changed to follower
+		output := &AppendEntryOutput{Success: false}
 		s.isCrashedMutex.RLock()
 		if s.isCrashed == true {
 			defer s.isCrashedMutex.RUnlock()
+			appendChan <- output
 			break
 		}
 		s.isCrashedMutex.RUnlock()
@@ -285,6 +294,7 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 		s.isLeaderMutex.Lock()
 		if s.isLeader == false {
 			defer s.isLeaderMutex.Unlock()
+			appendChan <- output
 			break
 		}
 		s.isLeaderMutex.Unlock()
@@ -317,7 +327,7 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 			input.PrevLogTerm = s.log[input.PrevLogIndex].Term
 		}
 
-		output, err := client.AppendEntries(ctx, input)
+		output, err = client.AppendEntries(ctx, input)
 		// server crashed -> try to reconnect the server
 		if err != nil {
 			// heartbeat
@@ -431,7 +441,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	}
 
 	output.Success = true
-	output.MatchedIndex = s.nextIndex[s.serverId]
+	output.MatchedIndex = s.nextIndex[s.serverId] - 1
 
 	//fmt.Println(s.log)
 	return &output, nil

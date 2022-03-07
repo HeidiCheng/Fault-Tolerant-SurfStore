@@ -1,6 +1,7 @@
 package SurfTest
 
 import (
+	"log"
 	"os"
 	"testing"
 
@@ -112,7 +113,7 @@ func TestSyncTwoClientsSameFileLeaderFailure(t *testing.T) {
 	}
 }
 
-func TestRaftRecoverable(t *testing.T) {
+func TestRaftRecoverableClient(t *testing.T) {
 	t.Logf("client1 syncs with file1. client2 syncs with file1 (different content). client1 syncs again.")
 	cfgPath := "./config_files/3nodes.txt"
 	test := InitTest(cfgPath, "8080")
@@ -127,6 +128,8 @@ func TestRaftRecoverable(t *testing.T) {
 	//clients add different files
 	file1 := "multi_file1.txt"
 	file2 := "multi_file1.txt"
+
+	workingDir, _ := os.Getwd()
 
 	err := worker1.AddFile(file1)
 	if err != nil {
@@ -149,6 +152,18 @@ func TestRaftRecoverable(t *testing.T) {
 
 	test.Clients[1].Restore(test.Context, &emptypb.Empty{})
 	test.Clients[2].Restore(test.Context, &emptypb.Empty{})
+
+	fileMeta1, err := LoadMetaFromMetaFile(workingDir + "/test0/")
+	if err != nil {
+		t.Fatalf("Could not load meta file for client1")
+	}
+
+	fileMeta2, err := LoadMetaFromMetaFile(workingDir + "/test1/")
+	if err != nil {
+		t.Fatalf("Could not load meta file for client2")
+	}
+	log.Println(fileMeta1)
+	log.Panicln(fileMeta2)
 
 	t.Fatalf("Testing")
 
