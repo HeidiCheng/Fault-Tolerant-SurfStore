@@ -3,7 +3,6 @@ package surfstore
 import (
 	context "context"
 	"fmt"
-	"log"
 	"math"
 	"sync"
 	"time"
@@ -203,8 +202,8 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	s.log = append(s.log, &op)
 	s.logMutex.Unlock()
 	s.nextIndex[s.serverId]++
-	log.Println("Leader Id: ", s.serverId)
-	log.Println("Leader log: ", s.log)
+	fmt.Println("Leader Id: ", s.serverId)
+	fmt.Println("Leader log: ", s.log)
 
 	committed := make(chan bool)
 	s.pendingCommits = append(s.pendingCommits, committed) // deal with multiple sync
@@ -245,13 +244,13 @@ func (s *RaftSurfstore) AttemptCommit() {
 	// TODO: handle leader change to followers
 	committed := false
 	for {
-		s.isCrashedMutex.RLock()
-		if s.isCrashed == true {
-			defer s.isCrashedMutex.RUnlock()
-			s.pendingCommits[targetIndex] <- false
-			break
-		}
-		s.isCrashedMutex.RUnlock()
+		// s.isCrashedMutex.RLock()
+		// if s.isCrashed == true {
+		// 	defer s.isCrashedMutex.RUnlock()
+		// 	s.pendingCommits[targetIndex] <- false
+		// 	break
+		// }
+		// s.isCrashedMutex.RUnlock()
 
 		appended := <-appendChan
 		// leader change to follower
