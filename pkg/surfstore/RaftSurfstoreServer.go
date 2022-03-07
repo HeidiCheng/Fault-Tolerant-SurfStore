@@ -2,7 +2,7 @@ package surfstore
 
 import (
 	context "context"
-	"log"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -241,6 +241,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 	appendCount := 1
 
 	// TODO: handle leader change to followers
+	committed := false
 	for {
 		s.isCrashedMutex.RLock()
 		if s.isCrashed == true {
@@ -259,9 +260,10 @@ func (s *RaftSurfstore) AttemptCommit() {
 		if appended != nil && appended.Success {
 			appendCount++
 		}
-		if appendCount > len(s.ipList)/2 {
+		if appendCount > len(s.ipList)/2 && (committed == false) {
 			s.pendingCommits[targetIndex] <- true
 			s.commitIndex++ // not sure about this
+			committed = true
 			//break
 		}
 		if appendCount == len(s.ipList) {
@@ -327,7 +329,7 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 		}
 		// success
 		if output.Success == true {
-			log.Println(s.log)
+			fmt.Println(s.log)
 			s.nextIndex[serverIndex] = int64(len(s.log))
 			s.matchIndex[serverIndex] = s.matchIndex[s.serverId]
 			appendChan <- output
@@ -371,8 +373,8 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 		Term:         input.Term,
 	}
 
-	log.Println("server id:", s.serverId)
-	log.Println("log: ", s.log)
+	fmt.Println("server id:", s.serverId)
+	fmt.Println("log: ", s.log)
 
 	s.isCrashedMutex.RLock()
 	if s.isCrashed == true {

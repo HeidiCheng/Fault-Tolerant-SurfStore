@@ -142,13 +142,15 @@ func TestRaftRecoverable(t *testing.T) {
 	}
 
 	//client1 syncs
-	err = SyncClient("localhost:8080", "test0", BLOCK_SIZE, cfgPath)
-	if err != nil {
-		t.Fatalf("Sync failed")
-	}
+	// err = SyncClient("localhost:8080", "test0", BLOCK_SIZE, cfgPath)
+	// if err != nil {
+	// 	t.Fatalf("Sync failed")
+	// }
 
 	test.Clients[1].Restore(test.Context, &emptypb.Empty{})
 	test.Clients[2].Restore(test.Context, &emptypb.Empty{})
+
+	t.Fatalf("Testing")
 
 }
 
