@@ -341,7 +341,7 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 		}
 		// success
 		if output.Success == true {
-			fmt.Println(s.log)
+			fmt.Println("Leader's log: ", s.log)
 			s.nextIndex[serverIndex] = int64(len(s.log))
 			s.matchIndex[serverIndex] = s.matchIndex[s.serverId]
 			appendChan <- output
@@ -427,11 +427,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	// 4. Append any new entries not already in the log
 	s.logMutex.Lock()
-	if len(s.log) == 0 {
-		s.log = input.Entries
-	} else {
-		s.log = append(s.log, input.Entries...)
-	}
+	s.log = append(s.log, input.Entries...)
 	s.logMutex.Unlock()
 	s.nextIndex[s.serverId] = int64(len(s.log))
 	s.matchIndex[s.serverId] += int64(len(input.Entries))
