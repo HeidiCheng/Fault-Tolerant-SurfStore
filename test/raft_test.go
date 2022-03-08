@@ -126,6 +126,7 @@ func TestRaftRecovery(t *testing.T) {
 	// TEST
 	leaderIdx := 0
 	test.Clients[leaderIdx].SetLeader(test.Context, &emptypb.Empty{})
+	test.Clients[leaderIdx].SendHeartbeat(test.Context, &emptypb.Empty{})
 
 	filemeta1 := &surfstore.FileMetaData{
 		Filename:      "testFile1",
@@ -137,6 +138,7 @@ func TestRaftRecovery(t *testing.T) {
 	test.Clients[2].Crash(test.Context, &emptypb.Empty{})
 
 	go test.Clients[leaderIdx].UpdateFile(context.Background(), filemeta1)
+	test.Clients[leaderIdx].SendHeartbeat(test.Context, &emptypb.Empty{})
 
 	test.Clients[1].Restore(test.Context, &emptypb.Empty{})
 	test.Clients[2].Restore(test.Context, &emptypb.Empty{})
