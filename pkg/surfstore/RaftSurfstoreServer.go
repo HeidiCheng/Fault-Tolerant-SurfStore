@@ -428,14 +428,12 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 	s.isLeaderMutex.Unlock()
 	s.term++
 
-	if s.commitIndex == -1 {
-		s.log = make([]*UpdateOperation, 0)
-	} else {
-		s.log = s.log[:s.commitIndex+1]
-	}
-
 	for i, _ := range s.nextIndex {
-		s.nextIndex[i] = int64(len(s.log))
+		if i == s.serverId {
+			s.nextIndex[s.serverId] = len(s.log)
+			continue
+		}
+		s.nextIndex[i] = -1
 		s.matchIndex[i] = -1
 	}
 
@@ -488,6 +486,25 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		}
 		if output != nil && output.Success {
 			count++
+		}
+	}
+
+	// check committed but not record index
+	for {
+		targetIndex := s.commitIndex + 1
+		if targetIndex >= int64(len(s.log)) {
+			break
+		}
+		count := 0
+		for _, nextIndex := range s.nextIndex {
+			if nextIndex > targetIndex {
+				count++
+			}
+		}
+		if count > len(s.ipList)/2 {
+			s.commitIndex++
+		} else {
+			break
 		}
 	}
 
