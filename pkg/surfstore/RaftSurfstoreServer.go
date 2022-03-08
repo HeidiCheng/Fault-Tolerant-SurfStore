@@ -222,7 +222,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		appended := <-appendChan
 		// leader change to follower
 
-		if appended.Success == false && appended.Term == -1 {
+		if appended.Success == false {
 			s.pendingCommits[targetIndex] <- CRASHED
 			break
 		}
