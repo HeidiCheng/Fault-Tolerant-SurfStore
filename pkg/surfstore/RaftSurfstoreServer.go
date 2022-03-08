@@ -2,6 +2,7 @@ package surfstore
 
 import (
 	context "context"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -247,15 +248,6 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 	for {
 		// server crashed or changed to follower
 		output := &AppendEntryOutput{Success: false}
-		// s.isLeaderMutex.RLock()
-		// isLeader := s.isLeader
-		// s.isLeaderMutex.RUnlock()
-
-		// if isLeader == false {
-		// 	appendChan <- output
-		// 	return
-		// }
-
 		s.isCrashedMutex.RLock()
 		isCrashed := s.isCrashed
 		s.isCrashedMutex.RUnlock()
@@ -397,7 +389,8 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	s.logMutex.Unlock()
 	s.nextIndex[s.serverId] = int64(len(s.log))
 	s.matchIndex[s.serverId] += int64(len(input.Entries))
-	//fmt.Println(s.log)
+	fmt.Println("Server Id: ", s.serverId)
+	fmt.Println("Server log: ", s.log)
 
 	// 5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
 	// of last new entry)
@@ -474,6 +467,9 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 	if isLeader == false {
 		return &Success{Flag: false}, ERR_NOT_LEADER
 	}
+
+	fmt.Println("Leader Id: ", s.serverId)
+	fmt.Println("Leader log: ", s.log)
 
 	count := 1
 	appendChan := make(chan *AppendEntryOutput, len(s.ipList))
