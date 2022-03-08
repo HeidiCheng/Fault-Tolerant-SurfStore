@@ -168,12 +168,12 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	go s.AttemptCommit()
 
 	state := <-committed
+	_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
+
 	if state == SUCCESS {
-		_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
 		return s.metaStore.UpdateFile(ctx, filemeta)
 	} else if state == NOT_LEADER {
 		// if the leader turn into follower
-		// did not handle the leader crashed error
 		s.isLeaderMutex.Lock()
 		s.isLeader = false
 		s.isLeaderMutex.Unlock()
@@ -182,7 +182,6 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		s.isLeaderMutex.Lock()
 		s.isLeader = false
 		s.isLeaderMutex.Unlock()
-		//fmt.Println("Leader crashed")
 		return nil, ERR_SERVER_CRASHED
 	}
 
