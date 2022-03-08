@@ -437,6 +437,12 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 	s.isLeaderMutex.Unlock()
 	s.term++
 
+	if s.commitIndex == -1 {
+		s.log = make([]*UpdateOperation, 0)
+	} else {
+		s.log = s.log[:s.commitIndex+1]
+	}
+
 	for i, _ := range s.nextIndex {
 		s.nextIndex[i] = int64(len(s.log))
 		s.matchIndex[i] = -1
