@@ -184,6 +184,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		s.isLeaderMutex.Unlock()
 		return nil, ERR_NOT_LEADER
 	} else if state == CRASHED {
+		fmt.Println("leader crashed!")
 		s.isLeaderMutex.Lock()
 		s.isLeader = false
 		s.isLeaderMutex.Unlock()
@@ -252,13 +253,13 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 
 	for {
 		// server crashed or changed to follower
-		output := &AppendEntryOutput{Success: false, Term: -1}
+		//output := &AppendEntryOutput{Success: false, Term: -1}
 		s.isCrashedMutex.RLock()
 		isCrashed := s.isCrashed
 		s.isCrashedMutex.RUnlock()
 
 		if isCrashed == true {
-			appendChan <- output
+			appendChan <- &AppendEntryOutput{Success: false, Term: -1}
 			return
 		}
 
@@ -290,12 +291,13 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 			input.PrevLogTerm = s.log[input.PrevLogIndex].Term
 		}
 
-		output, err = client.AppendEntries(ctx, input)
+		output, err := client.AppendEntries(ctx, input)
 		// server crashed -> try to reconnect the server
 		if err != nil {
 			// heartbeat
 			if entryIndex == -1 {
-				appendChan <- output
+				//fmt.Println("server crashed")
+				appendChan <- &AppendEntryOutput{Success: false, Term: -1}
 				return
 			}
 			continue
@@ -395,6 +397,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	s.matchIndex[s.serverId] += int64(len(input.Entries))
 	fmt.Println("Server Id: ", s.serverId)
 	fmt.Println("Server log: ", s.log)
+	fmt.Println("server commit index:", s.commitIndex)
 
 	// 5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
 	// of last new entry)
@@ -478,6 +481,9 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		//go s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		output := <-appendChan
+		fmt.Println("id: ", idx)
+		fmt.Println(output)
+
 		if output != nil && output.Term > s.term {
 			s.isLeaderMutex.Lock()
 			s.isLeader = false
@@ -486,6 +492,9 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		}
 		if output != nil && output.Success {
 			count++
+		}
+		if output != nil && output.Success == false {
+			fmt.Println("Server crashed ", idx)
 		}
 	}
 
