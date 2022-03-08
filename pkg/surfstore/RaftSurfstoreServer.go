@@ -429,11 +429,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 	s.term++
 
 	for i, _ := range s.nextIndex {
-		if int64(i) == s.serverId {
-			s.nextIndex[s.serverId] = int64(len(s.log))
-			continue
-		}
-		s.nextIndex[i] = -1
+		s.nextIndex[s.serverId] = int64(len(s.log))
 		s.matchIndex[i] = -1
 	}
 
