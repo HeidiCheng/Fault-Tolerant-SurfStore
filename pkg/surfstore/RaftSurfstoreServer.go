@@ -172,7 +172,10 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	//_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
 
 	if state == SUCCESS {
-		_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
+		_, err := s.SendHeartbeat(ctx, &emptypb.Empty{})
+		if err != nil {
+			return nil, err
+		}
 		return s.metaStore.UpdateFile(ctx, filemeta)
 	} else if state == NOT_LEADER {
 		// if the leader turn into follower
@@ -211,7 +214,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		// s.isCrashedMutex.RLock()
 		// if s.isCrashed == true {
 		// 	defer s.isCrashedMutex.RUnlock()
-		// 	s.pendingCommits[targetIndex] <- false
+		// 	s.pendingCommits[targetIndex] <- CRASHED
 		// 	break
 		// }
 		// s.isCrashedMutex.RUnlock()
@@ -219,13 +222,13 @@ func (s *RaftSurfstore) AttemptCommit() {
 		appended := <-appendChan
 		// leader change to follower
 
-		if appended.Term > s.term {
-			s.pendingCommits[targetIndex] <- NOT_LEADER
+		if appended.Success == false && appended.Term == -1 {
+			s.pendingCommits[targetIndex] <- CRASHED
 			break
 		}
 
-		if appended.Success == false {
-			s.pendingCommits[targetIndex] <- CRASHED
+		if appended.Term > s.term {
+			s.pendingCommits[targetIndex] <- NOT_LEADER
 			break
 		}
 
@@ -249,7 +252,7 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 
 	for {
 		// server crashed or changed to follower
-		output := &AppendEntryOutput{Success: false}
+		output := &AppendEntryOutput{Success: false, Term: -1}
 		s.isCrashedMutex.RLock()
 		isCrashed := s.isCrashed
 		s.isCrashedMutex.RUnlock()
@@ -301,7 +304,6 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 		if output.Success == true {
 			//fmt.Println("Leader's log: ", s.log)
 			s.nextIndex[serverIndex] = int64(len(s.log))
-			s.matchIndex[serverIndex] = s.matchIndex[s.serverId]
 			appendChan <- output
 			return
 		}
@@ -353,7 +355,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	s.isCrashedMutex.RUnlock()
 
 	if isCrashed == true {
-		return nil, ERR_SERVER_CRASHED
+		return &output, ERR_SERVER_CRASHED
 	}
 
 	// 1. Reply false if term < currentTerm (§5.1)
@@ -450,9 +452,9 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 	s.isCrashedMutex.RUnlock()
 
 	if isCrashed == true {
-		s.isLeaderMutex.Lock()
-		s.isLeader = false
-		s.isLeaderMutex.Unlock()
+		// s.isLeaderMutex.Lock()
+		// s.isLeader = false
+		// s.isLeaderMutex.Unlock()
 		return nil, ERR_SERVER_CRASHED
 	}
 
