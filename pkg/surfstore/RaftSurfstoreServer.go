@@ -247,14 +247,14 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 	for {
 		// server crashed or changed to follower
 		output := &AppendEntryOutput{Success: false}
-		s.isLeaderMutex.RLock()
-		isLeader := s.isLeader
-		s.isLeaderMutex.RUnlock()
+		// s.isLeaderMutex.RLock()
+		// isLeader := s.isLeader
+		// s.isLeaderMutex.RUnlock()
 
-		if isLeader == false {
-			appendChan <- output
-			return
-		}
+		// if isLeader == false {
+		// 	appendChan <- output
+		// 	return
+		// }
 
 		s.isCrashedMutex.RLock()
 		isCrashed := s.isCrashed

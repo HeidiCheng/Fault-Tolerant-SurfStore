@@ -334,7 +334,7 @@ func TestRaftNewLeaderPushesUpdates(t *testing.T) {
 	for _, server := range test.Clients {
 		state, _ := server.GetInternalState(test.Context, &emptypb.Empty{})
 		if !SameLog(goldenLog, state.Log) {
-			fmt.Println(state.Log)
+			fmt.Println("state log: ", state.Log)
 			t.Log("Logs do not match")
 			t.Fail()
 		}
