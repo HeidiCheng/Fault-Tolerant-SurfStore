@@ -2,7 +2,6 @@ package surfstore
 
 import (
 	context "context"
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -183,7 +182,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		s.isLeaderMutex.Lock()
 		s.isLeader = false
 		s.isLeaderMutex.Unlock()
-		fmt.Println("Leader crashed")
+		//fmt.Println("Leader crashed")
 		return nil, ERR_SERVER_CRASHED
 	}
 
@@ -437,12 +436,6 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 	s.isLeaderMutex.Unlock()
 	s.term++
 
-	if s.commitIndex == -1 {
-		s.log = make([]*UpdateOperation, 0)
-	} else {
-		s.log = s.log[:s.commitIndex+1]
-	}
-
 	for i, _ := range s.nextIndex {
 		s.nextIndex[i] = int64(len(s.log))
 		s.matchIndex[i] = -1
@@ -457,7 +450,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 // Only leaders send heartbeats, if the node is not the leader you can return Success = false
 func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	// panic("todo")
-	fmt.Println("Senging heartbeat")
+	//fmt.Println("Senging heartbeat")
 	s.isCrashedMutex.RLock()
 	isCrashed := s.isCrashed
 	s.isCrashedMutex.RUnlock()
