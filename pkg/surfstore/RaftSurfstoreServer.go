@@ -489,24 +489,24 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		}
 	}
 
-	// check committed but not record index
-	// for {
-	// 	targetIndex := s.commitIndex + 1
-	// 	if targetIndex >= int64(len(s.log)) {
-	// 		break
-	// 	}
-	// 	count := 0
-	// 	for _, nextIndex := range s.nextIndex {
-	// 		if nextIndex > targetIndex {
-	// 			count++
-	// 		}
-	// 	}
-	// 	if count > len(s.ipList)/2 {
-	// 		s.commitIndex++
-	// 	} else {
-	// 		break
-	// 	}
-	// }
+	//check committed but not record index
+	for {
+		targetIndex := s.commitIndex + 1
+		if targetIndex >= int64(len(s.log)) {
+			break
+		}
+		appendedCount := 0
+		for _, nextIndex := range s.nextIndex {
+			if nextIndex > targetIndex {
+				appendedCount++
+			}
+		}
+		if appendedCount > len(s.ipList)/2 {
+			s.commitIndex++
+		} else {
+			break
+		}
+	}
 
 	if count > len(s.ipList)/2 {
 		return &Success{Flag: true}, nil
