@@ -219,15 +219,16 @@ func (s *RaftSurfstore) AttemptCommit() {
 		appended := <-appendChan
 		// leader change to follower
 
+		if appended.Term > s.term {
+			s.pendingCommits[targetIndex] <- NOT_LEADER
+			break
+		}
+
 		if appended.Success == false {
 			s.pendingCommits[targetIndex] <- CRASHED
 			break
 		}
 
-		if appended.Term > s.term {
-			s.pendingCommits[targetIndex] <- NOT_LEADER
-			break
-		}
 		if appended != nil && appended.Success {
 			appendCount++
 		}
