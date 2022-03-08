@@ -359,7 +359,9 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 			input.PrevLogIndex = -1
 			input.PrevLogTerm = 0
 		} else {
-			input.Entries = append(s.log[output.MatchedIndex:input.PrevLogIndex+1], input.Entries...) // not sure if this is correct
+			if output.MatchedIndex != input.PrevLogIndex+1 {
+				input.Entries = append(s.log[output.MatchedIndex:input.PrevLogIndex+1], input.Entries...) // not sure if this is correct
+			}
 			input.PrevLogIndex = output.MatchedIndex
 			input.PrevLogTerm = s.log[input.PrevLogIndex].Term
 		}
@@ -425,7 +427,11 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 
 	// 4. Append any new entries not already in the log
 	s.logMutex.Lock()
-	s.log = append(s.log, input.Entries...)
+	if len(s.log) == 0 {
+		s.log = input.Entries
+	} else {
+		s.log = append(s.log, input.Entries...)
+	}
 	s.logMutex.Unlock()
 	s.nextIndex[s.serverId] = int64(len(s.log))
 	s.matchIndex[s.serverId] += int64(len(input.Entries))
