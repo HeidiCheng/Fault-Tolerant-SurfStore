@@ -187,9 +187,9 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		return nil, ERR_NOT_LEADER
 	} else if state == CRASHED {
 		fmt.Println("leader crashed!")
-		s.isLeaderMutex.Lock()
-		s.isLeader = false
-		s.isLeaderMutex.Unlock()
+		// s.isLeaderMutex.Lock()
+		// s.isLeader = false
+		// s.isLeaderMutex.Unlock()
 		return nil, ERR_SERVER_CRASHED
 	}
 
