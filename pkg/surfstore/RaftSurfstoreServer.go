@@ -477,11 +477,11 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		if int64(idx) == s.serverId {
 			continue
 		}
-		fmt.Println("Server id: ", idx)
+		//fmt.Println("Server id: ", idx)
 		//go s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		output := <-appendChan
-		fmt.Println("Output: ", output)
+		//fmt.Println("Output: ", output)
 
 		if output != nil && output.Term > s.term {
 			s.isLeaderMutex.Lock()
@@ -493,25 +493,6 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 			count++
 		}
 	}
-
-	//check committed but not record index
-	// for {
-	// 	targetIndex := s.commitIndex + 1
-	// 	if targetIndex >= int64(len(s.log)) {
-	// 		break
-	// 	}
-	// 	appendedCount := 0
-	// 	for _, nextIndex := range s.nextIndex {
-	// 		if nextIndex > targetIndex {
-	// 			appendedCount++
-	// 		}
-	// 	}
-	// 	if appendedCount > len(s.ipList)/2 {
-	// 		s.commitIndex++
-	// 	} else {
-	// 		break
-	// 	}
-	// }
 
 	if count > len(s.ipList)/2 {
 		return &Success{Flag: true}, nil
