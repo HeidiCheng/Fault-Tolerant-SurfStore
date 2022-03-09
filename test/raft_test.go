@@ -422,6 +422,8 @@ func TestRaftLogsCorrectlyOverwritten(t *testing.T) {
 
 	test.Clients[leaderIdx].Crash(context.Background(), &emptypb.Empty{})
 
+	time.Sleep(2 * time.Second)
+
 	test.Clients[1].Restore(context.Background(), &emptypb.Empty{})
 	test.Clients[2].Restore(context.Background(), &emptypb.Empty{})
 

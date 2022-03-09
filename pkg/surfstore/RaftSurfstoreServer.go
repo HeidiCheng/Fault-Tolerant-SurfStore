@@ -362,6 +362,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	s.isCrashedMutex.RUnlock()
 
 	if isCrashed == true {
+		s.term = input.Term
 		return &output, ERR_SERVER_CRASHED
 	}
 
