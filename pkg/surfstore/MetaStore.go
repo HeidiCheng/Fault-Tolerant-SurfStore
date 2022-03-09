@@ -36,7 +36,8 @@ func (m *MetaStore) UpdateFile(ctx context.Context, fileMetaData *FileMetaData) 
 		return &Version{Version: -1}, nil
 	}
 
-	m.FileMetaMap[fileMetaData.Filename] = &FileMetaData{Filename: fileMetaData.Filename, BlockHashList: fileMetaData.BlockHashList, Version: fileMetaData.Version}
+	newMeta := FileMetaData{Filename: fileMetaData.Filename, BlockHashList: fileMetaData.BlockHashList, Version: fileMetaData.Version}
+	m.FileMetaMap[fileMetaData.Filename] = &newMeta
 	//m.FileMetaMap[fileMetaData.Filename] = fileMetaData
 
 	return &Version{Version: fileMetaData.Version}, nil

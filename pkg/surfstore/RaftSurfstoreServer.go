@@ -174,8 +174,8 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 
 	if state == SUCCESS {
 		_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
-		updateMeta := &FileMetaData{Filename: filemeta.Filename, Version: filemeta.Version, BlockHashList: filemeta.BlockHashList}
-		return s.metaStore.UpdateFile(ctx, updateMeta)
+		//updateMeta := &FileMetaData{Filename: filemeta.Filename, Version: filemeta.Version, BlockHashList: filemeta.BlockHashList}
+		return s.metaStore.UpdateFile(ctx, filemeta)
 	} else if state == NOT_LEADER {
 		// if the leader turn into follower
 		s.isLeaderMutex.Lock()
@@ -251,6 +251,8 @@ func (s *RaftSurfstore) AttemptCommit() {
 
 func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, appendChan chan *AppendEntryOutput) {
 
+	input := &AppendEntryInput{Term: s.term, PrevLogTerm: 0, LeaderCommit: s.commitIndex}
+	initialized := false
 	for {
 		// server crashed or changed to follower
 		//output := &AppendEntryOutput{Success: false, Term: -1}
@@ -275,14 +277,15 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 
 		client := NewRaftSurfstoreClient(conn)
 
-		input := &AppendEntryInput{Term: s.term, PrevLogTerm: 0, LeaderCommit: s.commitIndex}
-
-		if entryIndex == -1 {
-			input.PrevLogIndex = int64(len(s.log) - 1)
-			input.Entries = make([]*UpdateOperation, 0)
-		} else {
-			input.PrevLogIndex = entryIndex - 1
-			input.Entries = []*UpdateOperation{s.log[entryIndex]}
+		if initialized == false {
+			if entryIndex == -1 {
+				input.PrevLogIndex = int64(len(s.log) - 1)
+				input.Entries = make([]*UpdateOperation, 0)
+			} else {
+				input.PrevLogIndex = entryIndex - 1
+				input.Entries = []*UpdateOperation{s.log[entryIndex]}
+			}
+			initialized = true
 		}
 
 		//log.Println(input)
@@ -407,8 +410,8 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	for s.lastApplied < s.commitIndex {
 		s.lastApplied++
 		entry := s.log[s.lastApplied]
-		updateMeta := &FileMetaData{Filename: entry.FileMetaData.Filename, Version: entry.FileMetaData.Version, BlockHashList: entry.FileMetaData.BlockHashList}
-		s.metaStore.UpdateFile(ctx, updateMeta)
+		//updateMeta := &FileMetaData{Filename: entry.FileMetaData.Filename, Version: entry.FileMetaData.Version, BlockHashList: entry.FileMetaData.BlockHashList}
+		s.metaStore.UpdateFile(ctx, entry.FileMetaData)
 	}
 
 	output.Success = true
