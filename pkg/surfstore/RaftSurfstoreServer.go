@@ -40,6 +40,8 @@ type RaftSurfstore struct {
 	isLeaderMutex *sync.RWMutex
 	logMutex      *sync.RWMutex
 	termMutex     *sync.RWMutex
+	commitMutex   *sync.RWMutex
+	nextMutex     *sync.RWMutex
 
 	/*--------------- Chaos Monkey --------------*/
 	isCrashed      bool
@@ -77,25 +79,6 @@ func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty
 			return &FileInfoMap{FileInfoMap: s.metaStore.FileMetaMap}, nil
 		}
 	}
-}
-
-func (s *RaftSurfstore) CheckAliveness(serverIdx int64, alive chan bool) {
-
-	addr := s.ipList[serverIdx]
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-	defer conn.Close()
-	if err != nil {
-		return
-	}
-	client := NewRaftSurfstoreClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	// get lock before isCrashed?
-	state, _ := client.IsCrashed(ctx, &emptypb.Empty{})
-	alive <- (!state.IsCrashed)
-	return
 }
 
 func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Empty) (*BlockStoreAddr, error) {
@@ -149,10 +132,12 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		return nil, ERR_SERVER_CRASHED
 	}
 
+	s.termMutex.RLock()
 	op := UpdateOperation{
 		Term:         s.term,
 		FileMetaData: filemeta,
 	}
+	s.termMutex.RUnlock()
 
 	// append entry to leader
 	s.logMutex.Lock()
@@ -173,8 +158,11 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	//_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
 
 	if state == SUCCESS {
-		_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
-		//updateMeta := &FileMetaData{Filename: filemeta.Filename, Version: filemeta.Version, BlockHashList: filemeta.BlockHashList}
+		_, err := s.SendHeartbeat(ctx, &emptypb.Empty{})
+		if err != nil {
+			return nil, err
+		}
+
 		return s.metaStore.UpdateFile(ctx, filemeta)
 	} else if state == NOT_LEADER {
 		// if the leader turn into follower
@@ -237,9 +225,14 @@ func (s *RaftSurfstore) AttemptCommit() {
 			appendCount++
 		}
 		if appendCount > len(s.ipList)/2 && (committed == false) {
+
 			s.pendingCommits[targetIndex] <- SUCCESS
 			s.matchIndex[s.serverId]++
+
+			s.commitMutex.Lock()
 			s.commitIndex++ // not sure about this
+			s.commitMutex.Unlock()
+
 			committed = true
 			//break
 		}
@@ -287,7 +280,9 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 			}
 			initialized = true
 		}
+		s.commitMutex.RLock()
 		input.LeaderCommit = s.commitIndex
+		s.commitMutex.RUnlock()
 
 		//log.Println(input)
 		//log.Println(input.PrevLogIndex)
@@ -309,7 +304,9 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 		// success
 		if output.Success == true {
 			//fmt.Println("Leader's log: ", s.log)
+			s.nextMutex.Lock()
 			s.nextIndex[serverIndex] = int64(len(s.log))
+			s.nextMutex.Unlock()
 			appendChan <- output
 			return
 		}
@@ -361,13 +358,17 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	s.isCrashedMutex.RUnlock()
 
 	if isCrashed == true {
+		s.termMutex.Lock()
 		s.term = input.Term
+		s.termMutex.Unlock()
 		return &output, ERR_SERVER_CRASHED
 	}
 
 	// 1. Reply false if term < currentTerm (§5.1)
 	if input.Term < s.term {
+		s.termMutex.RLock()
 		output.Term = s.term
+		s.termMutex.RUnlock()
 		return &output, nil
 	}
 
@@ -381,7 +382,9 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	// 2. Reply false if log doesn’t contain an entry at prevLogIndex whose term
 	// matches prevLogTerm (§5.3)
 	if (int64(len(s.log)-1) < input.PrevLogIndex) || (len(s.log) > 0 && input.PrevLogIndex > -1 && s.log[input.PrevLogIndex].Term != input.PrevLogTerm) {
+		s.nextMutex.Lock()
 		s.nextIndex[s.serverId] = input.PrevLogIndex
+		s.nextMutex.Unlock()
 		output.MatchedIndex = int64(math.Min(float64(len(s.log)), float64(input.PrevLogIndex-1)))
 		return &output, nil
 	}
@@ -398,26 +401,34 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	s.logMutex.Lock()
 	s.log = append(s.log, input.Entries...)
 	s.logMutex.Unlock()
+	s.nextMutex.Lock()
 	s.nextIndex[s.serverId] = int64(len(s.log))
 	s.matchIndex[s.serverId] += int64(len(input.Entries))
+	s.nextMutex.Unlock()
 	//fmt.Println("Server Id: ", s.serverId)
 	//fmt.Println("Server log: ", s.log)
 	//fmt.Println("server commit index:", s.commitIndex)
 
 	// 5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
-	// of last new entry)
+	// of last new entry)\
+	s.commitMutex.Lock()
 	s.commitIndex = int64(math.Min(float64(len(s.log)-1), float64(input.LeaderCommit)))
+	s.commitMutex.Unlock()
 
 	// Commit to entries to this server
+	s.commitMutex.RLock()
 	for s.lastApplied < s.commitIndex {
 		s.lastApplied++
 		entry := s.log[s.lastApplied]
 		//updateMeta := &FileMetaData{Filename: entry.FileMetaData.Filename, Version: entry.FileMetaData.Version, BlockHashList: entry.FileMetaData.BlockHashList}
 		s.metaStore.UpdateFile(ctx, entry.FileMetaData)
 	}
+	s.commitMutex.RUnlock()
 
 	output.Success = true
+	s.nextMutex.RLock()
 	output.MatchedIndex = s.nextIndex[s.serverId] - 1
+	s.nextMutex.RUnlock()
 
 	//fmt.Println(s.log)
 	return &output, nil
@@ -440,10 +451,12 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 	s.isLeaderMutex.Unlock()
 	s.term++
 
+	s.nextMutex.Lock()
 	for i, _ := range s.nextIndex {
 		s.nextIndex[s.serverId] = int64(len(s.log))
 		s.matchIndex[i] = -1
 	}
+	s.nextMutex.Unlock()
 
 	s.pendingCommits = make([]chan int, 0)
 
