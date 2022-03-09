@@ -477,11 +477,11 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		if int64(idx) == s.serverId {
 			continue
 		}
-		fmt.Printf("Server id: ", idx)
+		fmt.Println("Server id: ", idx)
 		//go s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		output := <-appendChan
-		fmt.Printf("Output: ", output)
+		fmt.Println("Output: ", output)
 
 		if output != nil && output.Term > s.term {
 			s.isLeaderMutex.Lock()
