@@ -1,7 +1,6 @@
 package SurfTest
 
 import (
-	"log"
 	"os"
 	"testing"
 
@@ -113,61 +112,61 @@ func TestSyncTwoClientsSameFileLeaderFailure(t *testing.T) {
 	}
 }
 
-func TestRaftRecoverableClient(t *testing.T) {
-	t.Logf("client1 syncs with file1. client2 syncs with file1 (different content). client1 syncs again.")
-	cfgPath := "./config_files/3nodes.txt"
-	test := InitTest(cfgPath, "8080")
-	defer EndTest(test)
-	test.Clients[0].SetLeader(test.Context, &emptypb.Empty{})
+// func TestRaftRecoverableClient(t *testing.T) {
+// 	t.Logf("client1 syncs with file1. client2 syncs with file1 (different content). client1 syncs again.")
+// 	cfgPath := "./config_files/3nodes.txt"
+// 	test := InitTest(cfgPath, "8080")
+// 	defer EndTest(test)
+// 	test.Clients[0].SetLeader(test.Context, &emptypb.Empty{})
 
-	worker1 := InitDirectoryWorker("test0", SRC_PATH)
-	worker2 := InitDirectoryWorker("test1", SRC_PATH)
-	defer worker1.CleanUp()
-	defer worker2.CleanUp()
+// 	worker1 := InitDirectoryWorker("test0", SRC_PATH)
+// 	worker2 := InitDirectoryWorker("test1", SRC_PATH)
+// 	defer worker1.CleanUp()
+// 	defer worker2.CleanUp()
 
-	//clients add different files
-	file1 := "multi_file1.txt"
-	file2 := "multi_file1.txt"
+// 	//clients add different files
+// 	file1 := "multi_file1.txt"
+// 	file2 := "multi_file1.txt"
 
-	workingDir, _ := os.Getwd()
+// 	workingDir, _ := os.Getwd()
 
-	err := worker1.AddFile(file1)
-	if err != nil {
-		t.FailNow()
-	}
+// 	err := worker1.AddFile(file1)
+// 	if err != nil {
+// 		t.FailNow()
+// 	}
 
-	test.Clients[1].Crash(test.Context, &emptypb.Empty{})
-	test.Clients[2].Crash(test.Context, &emptypb.Empty{})
+// 	test.Clients[1].Crash(test.Context, &emptypb.Empty{})
+// 	test.Clients[2].Crash(test.Context, &emptypb.Empty{})
 
-	err = worker1.UpdateFile(file2, "update text")
-	if err != nil {
-		t.FailNow()
-	}
+// 	err = worker1.UpdateFile(file2, "update text")
+// 	if err != nil {
+// 		t.FailNow()
+// 	}
 
-	//client1 syncs
-	// err = SyncClient("localhost:8080", "test0", BLOCK_SIZE, cfgPath)
-	// if err != nil {
-	// 	t.Fatalf("Sync failed")
-	// }
+// 	//client1 syncs
+// 	// err = SyncClient("localhost:8080", "test0", BLOCK_SIZE, cfgPath)
+// 	// if err != nil {
+// 	// 	t.Fatalf("Sync failed")
+// 	// }
 
-	test.Clients[1].Restore(test.Context, &emptypb.Empty{})
-	test.Clients[2].Restore(test.Context, &emptypb.Empty{})
+// 	test.Clients[1].Restore(test.Context, &emptypb.Empty{})
+// 	test.Clients[2].Restore(test.Context, &emptypb.Empty{})
 
-	fileMeta1, err := LoadMetaFromMetaFile(workingDir + "/test0/")
-	if err != nil {
-		t.Fatalf("Could not load meta file for client1")
-	}
+// 	fileMeta1, err := LoadMetaFromMetaFile(workingDir + "/test0/")
+// 	if err != nil {
+// 		t.Fatalf("Could not load meta file for client1")
+// 	}
 
-	fileMeta2, err := LoadMetaFromMetaFile(workingDir + "/test1/")
-	if err != nil {
-		t.Fatalf("Could not load meta file for client2")
-	}
-	log.Println(fileMeta1)
-	log.Panicln(fileMeta2)
+// 	fileMeta2, err := LoadMetaFromMetaFile(workingDir + "/test1/")
+// 	if err != nil {
+// 		t.Fatalf("Could not load meta file for client2")
+// 	}
+// 	log.Println(fileMeta1)
+// 	log.Panicln(fileMeta2)
 
-	t.Fatalf("Testing")
+// 	t.Fatalf("Testing")
 
-}
+// }
 
 // func TestSyncTwoClientsFileUpdateLeaderFailure(t *testing.T) {
 // 	t.Logf("client1 syncs with file1. client2 syncs. leader change. client2 syncs with file1 (different content). client1 syncs again.")
