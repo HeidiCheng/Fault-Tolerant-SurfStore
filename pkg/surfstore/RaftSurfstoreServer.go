@@ -52,7 +52,7 @@ type RaftSurfstore struct {
 
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
 	//panic("todo")
-
+	fmt.Println("Get file info map")
 	s.isLeaderMutex.RLock()
 	isLeader := s.isLeader
 	s.isLeaderMutex.RUnlock()
@@ -101,6 +101,7 @@ func (s *RaftSurfstore) CheckAliveness(serverIdx int64, alive chan bool) {
 
 func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Empty) (*BlockStoreAddr, error) {
 	//panic("todo")
+	fmt.Println("Get block store addr")
 	s.isLeaderMutex.RLock()
 	isLeader := s.isLeader
 	s.isLeaderMutex.RUnlock()
@@ -197,6 +198,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 
 func (s *RaftSurfstore) AttemptCommit() {
 
+	fmt.Println("Attemp Commit")
 	//targetIndex := s.commitIndex + 1
 	targetIndex := s.matchIndex[s.serverId] + 1
 	appendChan := make(chan *AppendEntryOutput, len(s.ipList))
@@ -251,6 +253,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 }
 
 func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, appendChan chan *AppendEntryOutput) {
+	fmt.Println("Append Entry to followers")
 
 	for {
 		// server crashed or changed to follower
@@ -342,7 +345,7 @@ func (s *RaftSurfstore) AppendEntriesToFollowers(serverIndex, entryIndex int64, 
 func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInput) (*AppendEntryOutput, error) {
 	//panic("todo")
 	// If the server is crashed -> return error
-
+	fmt.Println("Append Entries")
 	output := AppendEntryOutput{
 		ServerId:     s.serverId,
 		Success:      false,
@@ -421,7 +424,7 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 // This should set the leader status and any related variables as if the node has just won an election
 func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	// panic("todo")
-	//fmt.Println("Setting leader")
+	fmt.Println("Setting leader")
 	s.isCrashedMutex.RLock()
 	isCrashed := s.isCrashed
 	s.isCrashedMutex.RUnlock()
@@ -450,7 +453,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 // Only leaders send heartbeats, if the node is not the leader you can return Success = false
 func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	// panic("todo")
-	fmt.Println("Senging heartbeat")
+	fmt.Println("Sending heartbeat")
 	s.isCrashedMutex.RLock()
 	isCrashed := s.isCrashed
 	s.isCrashedMutex.RUnlock()
