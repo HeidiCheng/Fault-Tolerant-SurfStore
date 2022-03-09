@@ -387,6 +387,7 @@ func TestRaftNewLeaderPushesUpdates(t *testing.T) {
 			t.Fail()
 		}
 		if !SameMeta(goldenMeta.FileMetaMap, state.MetaMap.FileInfoMap) {
+			fmt.Println("state meta: ", state.MetaMap.FileInfoMap)
 			t.Log("MetaStore state is not correct")
 			t.Fail()
 		}
@@ -458,7 +459,7 @@ func TestRaftLogsCorrectlyOverwritten(t *testing.T) {
 			t.Fail()
 		}
 		if !SameMeta(goldenMeta.FileMetaMap, state.MetaMap.FileInfoMap) {
-			fmt.Println("state log: ", state.MetaMap.FileInfoMap)
+			fmt.Println("state meta: ", state.MetaMap.FileInfoMap)
 			t.Log("MetaStore state is not correct")
 			t.Fail()
 		}
