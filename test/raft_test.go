@@ -257,6 +257,7 @@ func TestRaftLogsConsistent(t *testing.T) {
 
 	goldenMeta := surfstore.NewMetaStore("")
 	goldenMeta.UpdateFile(test.Context, filemeta1)
+	goldenMeta.UpdateFile(test.Context, filemeta2)
 	goldenLog := make([]*surfstore.UpdateOperation, 0)
 	goldenLog = append(goldenLog, &surfstore.UpdateOperation{
 		Term:         1,
