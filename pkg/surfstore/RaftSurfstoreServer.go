@@ -172,10 +172,10 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	//_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
 
 	if state == SUCCESS {
-		_, err := s.SendHeartbeat(ctx, &emptypb.Empty{})
-		if err != nil {
-			return nil, err
-		}
+		_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
+		// if err != nil {
+		// 	return nil, err
+		// }
 		return s.metaStore.UpdateFile(ctx, filemeta)
 	} else if state == NOT_LEADER {
 		// if the leader turn into follower
