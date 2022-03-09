@@ -185,9 +185,9 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		return nil, ERR_NOT_LEADER
 	} else if state == CRASHED {
 		fmt.Println("leader crashed!")
-		// s.isLeaderMutex.Lock()
-		// s.isLeader = false
-		// s.isLeaderMutex.Unlock()
+		s.isLeaderMutex.Lock()
+		s.isLeader = false
+		s.isLeaderMutex.Unlock()
 		return nil, ERR_SERVER_CRASHED
 	}
 
@@ -354,8 +354,8 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 		Term:         input.Term,
 	}
 
-	//fmt.Println("server id:", s.serverId)
-	//fmt.Println("log: ", s.log)
+	fmt.Println("server id:", s.serverId)
+	fmt.Println("log: ", s.log)
 
 	s.isCrashedMutex.RLock()
 	isCrashed := s.isCrashed
@@ -460,9 +460,9 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 	s.isCrashedMutex.RUnlock()
 
 	if isCrashed == true {
-		// s.isLeaderMutex.Lock()
-		// s.isLeader = false
-		// s.isLeaderMutex.Unlock()
+		s.isLeaderMutex.Lock()
+		s.isLeader = false
+		s.isLeaderMutex.Unlock()
 		return nil, ERR_SERVER_CRASHED
 	}
 
