@@ -227,6 +227,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		// leader change to follower
 
 		if appended.Success == false {
+			fmt.Println("Crashed!! ", s.serverId)
 			s.pendingCommits[targetIndex] <- CRASHED
 			break
 		}
@@ -398,9 +399,9 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 	s.logMutex.Unlock()
 	s.nextIndex[s.serverId] = int64(len(s.log))
 	s.matchIndex[s.serverId] += int64(len(input.Entries))
-	fmt.Println("Server Id: ", s.serverId)
-	fmt.Println("Server log: ", s.log)
-	fmt.Println("server commit index:", s.commitIndex)
+	//fmt.Println("Server Id: ", s.serverId)
+	//fmt.Println("Server log: ", s.log)
+	//fmt.Println("server commit index:", s.commitIndex)
 
 	// 5. If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index
 	// of last new entry)
@@ -483,8 +484,6 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		//go s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		output := <-appendChan
-		fmt.Println("id: ", idx)
-		fmt.Println(output)
 
 		if output != nil && output.Term > s.term {
 			s.isLeaderMutex.Lock()
