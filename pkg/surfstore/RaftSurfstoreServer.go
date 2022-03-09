@@ -52,7 +52,7 @@ type RaftSurfstore struct {
 
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
 	//panic("todo")
-	fmt.Println("Get file info map")
+	//fmt.Println("Get file info map")
 	s.isLeaderMutex.RLock()
 	isLeader := s.isLeader
 	s.isLeaderMutex.RUnlock()
@@ -184,9 +184,9 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		return nil, ERR_NOT_LEADER
 	} else if state == CRASHED {
 		fmt.Println("leader crashed!")
-		// s.isLeaderMutex.Lock()
-		// s.isLeader = false
-		// s.isLeaderMutex.Unlock()
+		s.isLeaderMutex.Lock()
+		s.isLeader = false
+		s.isLeaderMutex.Unlock()
 		return nil, ERR_SERVER_CRASHED
 	}
 
@@ -454,9 +454,9 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 	s.isCrashedMutex.RUnlock()
 
 	if isCrashed == true {
-		// s.isLeaderMutex.Lock()
-		// s.isLeader = false
-		// s.isLeaderMutex.Unlock()
+		s.isLeaderMutex.Lock()
+		s.isLeader = false
+		s.isLeaderMutex.Unlock()
 		return nil, ERR_SERVER_CRASHED
 	}
 
@@ -477,11 +477,11 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		if int64(idx) == s.serverId {
 			continue
 		}
+		fmt.Printf("Server id: ", idx)
 		//go s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
-		fmt.Println("server id: ", idx)
 		s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		output := <-appendChan
-		fmt.Println(output)
+		fmt.Printf("Output: ", output)
 
 		if output != nil && output.Term > s.term {
 			s.isLeaderMutex.Lock()
