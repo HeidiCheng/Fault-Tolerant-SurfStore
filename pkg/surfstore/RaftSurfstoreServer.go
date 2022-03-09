@@ -173,11 +173,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	//_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
 
 	if state == SUCCESS {
-		//fmt.Println("Leader log after committed successfully: ", s.log)
 		_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
-		// if err != nil {
-		// 	return nil, err
-		// }
 		updateMeta := &FileMetaData{Filename: filemeta.Filename, Version: filemeta.Version, BlockHashList: filemeta.BlockHashList}
 		return s.metaStore.UpdateFile(ctx, updateMeta)
 	} else if state == NOT_LEADER {
@@ -187,10 +183,10 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		s.isLeaderMutex.Unlock()
 		return nil, ERR_NOT_LEADER
 	} else if state == CRASHED {
-		//fmt.Println("leader crashed!")
-		// s.isLeaderMutex.Lock()
-		// s.isLeader = false
-		// s.isLeaderMutex.Unlock()
+		fmt.Println("leader crashed!")
+		s.isLeaderMutex.Lock()
+		s.isLeader = false
+		s.isLeaderMutex.Unlock()
 		return nil, ERR_SERVER_CRASHED
 	}
 
@@ -215,13 +211,13 @@ func (s *RaftSurfstore) AttemptCommit() {
 	// TODO: handle leader change to followers
 	committed := false
 	for {
-		// s.isCrashedMutex.RLock()
-		// if s.isCrashed == true {
-		// 	defer s.isCrashedMutex.RUnlock()
-		// 	s.pendingCommits[targetIndex] <- CRASHED
-		// 	break
-		// }
-		// s.isCrashedMutex.RUnlock()
+		s.isCrashedMutex.RLock()
+		if s.isCrashed == true {
+			defer s.isCrashedMutex.RUnlock()
+			s.pendingCommits[targetIndex] <- CRASHED
+			break
+		}
+		s.isCrashedMutex.RUnlock()
 
 		appended := <-appendChan
 		// leader change to follower
@@ -458,9 +454,9 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 	s.isCrashedMutex.RUnlock()
 
 	if isCrashed == true {
-		// s.isLeaderMutex.Lock()
-		// s.isLeader = false
-		// s.isLeaderMutex.Unlock()
+		s.isLeaderMutex.Lock()
+		s.isLeader = false
+		s.isLeaderMutex.Unlock()
 		return nil, ERR_SERVER_CRASHED
 	}
 
