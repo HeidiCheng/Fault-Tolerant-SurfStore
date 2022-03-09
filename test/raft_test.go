@@ -263,10 +263,11 @@ func TestRaftLogsConsistent(t *testing.T) {
 		FileMetaData: filemeta1,
 	})
 	goldenLog = append(goldenLog, &surfstore.UpdateOperation{
-		Term:         1,
+		Term:         2,
 		FileMetaData: filemeta2,
 	})
 	fmt.Println(goldenLog)
+	fmt.Println(goldenMeta.FileMetaMap)
 
 	for _, server := range test.Clients {
 		state, _ := server.GetInternalState(test.Context, &emptypb.Empty{})
@@ -276,6 +277,7 @@ func TestRaftLogsConsistent(t *testing.T) {
 			t.Fail()
 		}
 		if !SameMeta(goldenMeta.FileMetaMap, state.MetaMap.FileInfoMap) {
+			fmt.Println(state.MetaMap.FileInfoMap)
 			t.Log("MetaStore state is not correct")
 			t.Fail()
 		}

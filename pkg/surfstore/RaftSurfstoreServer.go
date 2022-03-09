@@ -52,7 +52,7 @@ type RaftSurfstore struct {
 
 func (s *RaftSurfstore) GetFileInfoMap(ctx context.Context, empty *emptypb.Empty) (*FileInfoMap, error) {
 	//panic("todo")
-	//fmt.Println("Get file info map")
+	fmt.Println("Get file info map")
 	s.isLeaderMutex.RLock()
 	isLeader := s.isLeader
 	s.isLeaderMutex.RUnlock()
@@ -478,8 +478,10 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 			continue
 		}
 		//go s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
+		fmt.Println("server id: ", idx)
 		s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		output := <-appendChan
+		fmt.Println(output)
 
 		if output != nil && output.Term > s.term {
 			s.isLeaderMutex.Lock()
