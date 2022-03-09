@@ -213,12 +213,12 @@ func (s *RaftSurfstore) AttemptCommit() {
 	committed := false
 	for {
 		s.isCrashedMutex.RLock()
-		if s.isCrashed == true {
-			defer s.isCrashedMutex.RUnlock()
+		isCrashed := s.isCrashed
+		s.isCrashedMutex.RUnlock()
+		if isCrashed == true {
 			s.pendingCommits[targetIndex] <- CRASHED
 			break
 		}
-		s.isCrashedMutex.RUnlock()
 
 		appended := <-appendChan
 		// leader change to follower
