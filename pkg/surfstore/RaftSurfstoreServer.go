@@ -172,7 +172,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 	//_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
 
 	if state == SUCCESS {
-		fmt.Println("Leader log after committed successfully: ", s.log)
+		//fmt.Println("Leader log after committed successfully: ", s.log)
 		_, _ = s.SendHeartbeat(ctx, &emptypb.Empty{})
 		// if err != nil {
 		// 	return nil, err
