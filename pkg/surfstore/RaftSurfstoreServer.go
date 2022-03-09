@@ -2,7 +2,6 @@ package surfstore
 
 import (
 	context "context"
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -133,7 +132,7 @@ func (s *RaftSurfstore) GetBlockStoreAddr(ctx context.Context, empty *emptypb.Em
 func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) (*Version, error) {
 	//panic("todo")
 	//log.Println(filemeta)
-	fmt.Println("Update file")
+	//fmt.Println("Update file")
 	s.isLeaderMutex.RLock()
 	isLeader := s.isLeader
 	s.isLeaderMutex.RUnlock()
@@ -184,7 +183,7 @@ func (s *RaftSurfstore) UpdateFile(ctx context.Context, filemeta *FileMetaData) 
 		s.isLeaderMutex.Unlock()
 		return nil, ERR_NOT_LEADER
 	} else if state == CRASHED {
-		fmt.Println("leader crashed!")
+		//fmt.Println("leader crashed!")
 		// s.isLeaderMutex.Lock()
 		// s.isLeader = false
 		// s.isLeaderMutex.Unlock()
@@ -224,7 +223,7 @@ func (s *RaftSurfstore) AttemptCommit() {
 		// leader change to follower
 
 		if appended.Success == false {
-			fmt.Println("Crashed!! ", s.serverId)
+			//fmt.Println("Crashed!! ", s.serverId)
 			s.pendingCommits[targetIndex] <- CRASHED
 			break
 		}
@@ -354,8 +353,8 @@ func (s *RaftSurfstore) AppendEntries(ctx context.Context, input *AppendEntryInp
 		Term:         input.Term,
 	}
 
-	fmt.Println("server id:", s.serverId)
-	fmt.Println("log: ", s.log)
+	//fmt.Println("server id:", s.serverId)
+	//fmt.Println("log: ", s.log)
 
 	s.isCrashedMutex.RLock()
 	isCrashed := s.isCrashed
@@ -455,7 +454,7 @@ func (s *RaftSurfstore) SetLeader(ctx context.Context, _ *emptypb.Empty) (*Succe
 // Only leaders send heartbeats, if the node is not the leader you can return Success = false
 func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*Success, error) {
 	// panic("todo")
-	fmt.Println("Send heartbeat")
+	//fmt.Println("Send heartbeat")
 	s.isCrashedMutex.RLock()
 	isCrashed := s.isCrashed
 	s.isCrashedMutex.RUnlock()
@@ -484,7 +483,7 @@ func (s *RaftSurfstore) SendHeartbeat(ctx context.Context, _ *emptypb.Empty) (*S
 		if int64(idx) == s.serverId {
 			continue
 		}
-		fmt.Println("Server id: ", idx)
+		//fmt.Println("Server id: ", idx)
 		//go s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		s.AppendEntriesToFollowers(int64(idx), -1, appendChan)
 		output := <-appendChan
